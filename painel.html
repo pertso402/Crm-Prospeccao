@@ -110,6 +110,7 @@ select.filter:focus { outline:none; }
 .b-interessado { background:#3a1000; color:var(--fire); }
 .b-fechado     { background:#0a2a0a; color:var(--green); }
 .b-perdido     { background:#2a0a0a; color:var(--red); }
+.b-manual      { background:#1a1a2a; color:#a78bfa; border:1px solid #2a2a4a; }
 .b-inst        { background:#ffffff08; color:var(--text3); border:1px solid var(--border2); font-size:9px; }
 
 /* CONVERSA */
@@ -293,6 +294,7 @@ select.filter:focus { outline:none; }
       <option value="interessado">🔥 Interessado</option>
       <option value="fechado">Fechado</option>
       <option value="perdido">Perdido</option>
+      <option value="manual">Manual (Peter)</option>
     </select>
     <select class="filter" id="filter-inst" onchange="filterLeads()">
       <option value="">Todas instâncias</option>
@@ -358,6 +360,12 @@ select.filter:focus { outline:none; }
     <div class="form-row">
       <label class="form-label">Observação de captação</label>
       <textarea class="form-textarea" id="f-obs" placeholder="O que você viu no perfil deles? Ex: feed lindo, bowls incríveis, mas cardápio é PDF básico..."></textarea>
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+        <input type="checkbox" id="f-manual" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+        <span style="font-size:12px;color:var(--text2);">Prospecção manual <span style="color:var(--text3);font-size:11px;">(eu mesmo vou conversar — agente não interfere, mas tudo fica gravado)</span></span>
+      </label>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
@@ -632,6 +640,7 @@ const STAGES = [
   { key: 'aguardando_decisor', label: 'Aguard. Decisor', color: '#aadd00' },
   { key: 'follow_up_frio', label: 'Follow-up Frio', color: '#ffa502' },
   { key: 'interessado', label: '🔥 Interessado', color: '#ff6b35' },
+  { key: 'manual', label: '✍ Manual', color: '#a78bfa' },
   { key: 'fechado', label: 'Fechado', color: '#2ed573' },
   { key: 'perdido', label: 'Perdido', color: '#ff4757' },
 ];
@@ -722,7 +731,7 @@ function stageDisplay(s) {
   const map = {
     novo: 'Novo', abordagem_enviada: 'Abordagem', aguardando_decisor: 'Aguard. Decisor',
     follow_up_frio: 'Follow-up', interessado: 'Interessado', fechado: 'Fechado', perdido: 'Perdido',
-    contato_iniciado: 'Em Contato', loom_enviado: 'Loom', reuniao_agendada: 'Reunião',
+    manual: '✍ Manual', contato_iniciado: 'Em Contato', loom_enviado: 'Loom', reuniao_agendada: 'Reunião',
   };
   return map[s] || s || 'Novo';
 }
@@ -776,6 +785,7 @@ function openModalNovo() {
   document.getElementById('f-instancia').value = 'trimly';
   document.getElementById('f-instagram').value = '';
   document.getElementById('f-obs').value = '';
+  document.getElementById('f-manual').checked = false;
   document.getElementById('modal-overlay').classList.remove('hidden');
   setTimeout(() => document.getElementById('f-nome').focus(), 50);
 }
@@ -793,6 +803,7 @@ function openModalEditar(leadId) {
   document.getElementById('f-instancia').value = lead.instancia_whatsapp || 'trimly';
   document.getElementById('f-instagram').value = lead.instagram || '';
   document.getElementById('f-obs').value = lead.observacao_captacao || '';
+  document.getElementById('f-manual').checked = !!(lead.assumido_por_humano);
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
 
@@ -811,6 +822,8 @@ async function salvarLead() {
   btn.disabled = true;
   btn.textContent = 'Salvando...';
 
+  const isManual = document.getElementById('f-manual').checked;
+
   const dados = {
     nome_negocio: nome,
     segmento: document.getElementById('f-segmento').value.trim() || null,
@@ -818,6 +831,8 @@ async function salvarLead() {
     instancia_whatsapp: document.getElementById('f-instancia').value,
     instagram: document.getElementById('f-instagram').value.trim() || null,
     observacao_captacao: document.getElementById('f-obs').value.trim() || null,
+    assumido_por_humano: isManual,
+    conversa_pausada: isManual,
     updated_at: new Date().toISOString(),
   };
 
@@ -830,7 +845,7 @@ async function salvarLead() {
       const { error } = await sb.from('leads').insert({
         ...dados,
         whatsapp,
-        stage: 'novo',
+        stage: isManual ? 'manual' : 'novo',
         created_at: new Date().toISOString(),
       });
       if (error) throw error;
