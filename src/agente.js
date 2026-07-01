@@ -23,8 +23,13 @@ export async function iniciarAbordagem(lead) {
   console.log(`[agente] Iniciando abordagem: ${lead.nome_negocio} via ${inst}`);
 
   try {
-    // 1. Saudação inicial (varia pra reduzir fingerprint de spam)
-    const saudacoes = ['Boa tarde', 'Oi, boa tarde', 'Boa tarde!', 'Olá, boa tarde'];
+    // 1. Saudação inicial conforme horário (varia pra reduzir fingerprint de spam)
+    const hora = new Date().getHours();
+    const saudacoes = hora < 12
+      ? ['Bom dia', 'Oi, bom dia', 'Bom dia!', 'Olá, bom dia']
+      : hora < 18
+      ? ['Boa tarde', 'Oi, boa tarde', 'Boa tarde!', 'Olá, boa tarde']
+      : ['Boa noite', 'Oi, boa noite', 'Boa noite!', 'Olá, boa noite'];
     const saudacao = saudacoes[Math.floor(Math.random() * saudacoes.length)];
     await enviarTexto(inst, whatsapp, saudacao);
     await logMensagem({ lead_id: id, sessao_id: sid, remetente: 'ia', mensagem: saudacao, stage_no_momento: 'novo' });
