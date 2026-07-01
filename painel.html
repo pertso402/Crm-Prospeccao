@@ -260,6 +260,11 @@ select.filter:focus { outline:none; }
   </div>
   <div class="header-right">
     <span class="timestamp" id="last-update">—</span>
+    <div id="agente-status" style="display:flex;align-items:center;gap:8px;">
+      <span id="agente-badge" style="font-size:11px;padding:4px 10px;border-radius:20px;border:1px solid var(--border2);color:var(--text3);">⏳ verificando</span>
+      <button id="btn-pausar" onclick="pausarAgente()" style="display:none;padding:4px 12px;border-radius:5px;background:#2a0a0a;border:1px solid #4a1a1a;color:var(--red);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;">⏸ Pausar</button>
+      <button id="btn-retomar" onclick="retomarAgente()" style="display:none;padding:4px 12px;border-radius:5px;background:#0a2a0a;border:1px solid #1a4a1a;color:var(--green);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;">▶ Retomar</button>
+    </div>
     <span class="conn-badge" id="conn-badge">● conectando</span>
   </div>
 </header>
@@ -864,6 +869,62 @@ async function salvarLead() {
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ── CONTROLE DO AGENTE ────────────────────────────────────
+const AGENTE_URL = 'https://agente-crm.b1h6rm.easypanel.host';
+const ADMIN_SENHA = 'arte2026';
+
+async function verificarStatusAgente() {
+  try {
+    const r = await fetch(`${AGENTE_URL}/admin/status?senha=${ADMIN_SENHA}`);
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    const ativo = d.ativo;
+    const badge = document.getElementById('agente-badge');
+    const btnPausar = document.getElementById('btn-pausar');
+    const btnRetomar = document.getElementById('btn-retomar');
+    if (ativo) {
+      badge.textContent = '🟢 Agente ativo';
+      badge.style.color = 'var(--green)';
+      badge.style.borderColor = '#1a4a1a';
+      badge.style.background = '#0a2a0a';
+      btnPausar.style.display = 'inline-block';
+      btnRetomar.style.display = 'none';
+    } else {
+      badge.textContent = '🔴 Agente pausado';
+      badge.style.color = 'var(--red)';
+      badge.style.borderColor = '#4a1a1a';
+      badge.style.background = '#2a0a0a';
+      btnPausar.style.display = 'none';
+      btnRetomar.style.display = 'inline-block';
+    }
+  } catch {
+    const badge = document.getElementById('agente-badge');
+    badge.textContent = '⚫ Servidor offline';
+    badge.style.color = 'var(--text3)';
+  }
+}
+
+async function pausarAgente() {
+  if (!confirm('Pausar o agente? Ele para de enviar mensagens até você retomar.')) return;
+  try {
+    await fetch(`${AGENTE_URL}/admin/pausar?senha=${ADMIN_SENHA}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ motivo: 'pausa manual pelo painel' }) });
+    showToast('Agente pausado', 'fire');
+    await verificarStatusAgente();
+  } catch { showToast('Erro ao pausar', 'fire'); }
+}
+
+async function retomarAgente() {
+  try {
+    await fetch(`${AGENTE_URL}/admin/retomar?senha=${ADMIN_SENHA}`, { method: 'POST' });
+    showToast('Agente retomado!', 'ok');
+    await verificarStatusAgente();
+  } catch { showToast('Erro ao retomar', 'fire'); }
+}
+
+// Verifica status ao carregar e a cada 30s
+verificarStatusAgente();
+setInterval(verificarStatusAgente, 30000);
 
 // ── START ─────────────────────────────────────────────────
 init();
