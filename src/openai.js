@@ -46,6 +46,11 @@ ESTRUTURA (4 parágrafos curtos):
 3. Solução + prova: faço cardápio digital sob medida, entreguei pra doceria Tali. "A ideia é o cliente sentir muito desejo antes de pôr a mão no bolso. Quem tá com água na boca pede mais."
 4. CTA: pedir permissão pra montar prévia, de graça, sem compromisso.
 
+REGRA CRÍTICA SOBRE PRODUTOS:
+- NUNCA invente produtos, itens ou nomes que não estejam explicitamente na OBSERVAÇÃO acima.
+- Se a observação não citar um produto específico, elogie a apresentação visual geral ("os produtos de vocês", "as fotos do feed") sem nomear nada.
+- Citar produto errado (ex: sanduíche num açaí) é pior do que não citar produto nenhum.
+
 PALAVRAS E EXPRESSÕES PROIBIDAS (disparam alarme de IA):
 - "gritante", "fascinado", "cuidado na apresentação", "justamente", "personalizado", "resolver situações", "transformar a experiência"
 - Qualquer frase com estrutura de relatório ou apresentação comercial
@@ -92,7 +97,13 @@ REGRAS: WhatsApp real, tom casual brasileiro, sem linguagem corporativa, máximo
     max_tokens: 380,
   });
 
-  return aberturaForçada + ' ' + res.choices[0].message.content.trim();
+  const content = res.choices[0].message.content.trim();
+  // Evita duplicação: o modelo às vezes repete a abertura no início da resposta
+  const prefixoInicio = aberturaForçada.split(' ').slice(0, 5).join(' ').toLowerCase();
+  if (content.toLowerCase().startsWith(prefixoInicio)) {
+    return content;
+  }
+  return aberturaForçada + ' ' + content;
 }
 
 // ── DETECTAR INTENÇÃO DA RESPOSTA ─────────────────────────
