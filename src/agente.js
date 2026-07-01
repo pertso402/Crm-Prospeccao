@@ -34,15 +34,18 @@ export async function iniciarAbordagem(lead) {
     await enviarTexto(inst, whatsapp, saudacao);
     await logMensagem({ lead_id: id, sessao_id: sid, remetente: 'ia', mensagem: saudacao, stage_no_momento: 'novo' });
 
+    // 'contato_iniciado' = só a saudação foi enviada. O pitch ainda NÃO foi.
+    // (stage 'abordagem_enviada' é reservado para quando o pitch de fato sai)
     await updateLead(id, {
-      stage: 'abordagem_enviada',
+      stage: 'contato_iniciado',
+      abordado_em: new Date().toISOString(),
       ultimo_contato: new Date().toISOString(),
     });
 
-    // A partir daqui o agente reage via webhook (processarResposta)
-    // Agendamos um follow-up caso não haja resposta em 1h
+    // Se ninguém responder a saudação em 1h, o follow-up 'saudacao'
+    // avança a conversa perguntando pelo dono
     const fu1 = new Date(Date.now() + 60 * 60 * 1000); // +1h
-    await agendarFollowUp(id, 'frio_1', fu1.toISOString());
+    await agendarFollowUp(id, 'saudacao', fu1.toISOString());
 
   } catch (err) {
     console.error(`[agente] Erro na abordagem de ${lead.nome_negocio}:`, err.message);
@@ -83,7 +86,9 @@ export async function processarResposta(numeroLead, mensagemTexto) {
     stage_no_momento: lead.stage,
   });
 
-  const pitchEnviado = lead.stage === 'abordagem_enviada' || (lead.tentativas_followup || 0) > 0;
+  // O pitch só conta como enviado quando conversa_estado === 'pitch'
+  // (setado nos handlers DECISOR e RELAY). A saudação inicial NÃO é pitch.
+  const pitchEnviado = lead.conversa_estado === 'pitch';
   const aguardandoDono = lead.stage === 'aguardando_decisor';
   const ultimaPerguntas = lead.conversa_estado || null;
 
@@ -182,7 +187,7 @@ export async function processarResposta(numeroLead, mensagemTexto) {
     await enviarTexto(inst, lead.whatsapp, followMsg);
     await logMensagem({ lead_id: lead.id, sessao_id: sid, remetente: 'ia', mensagem: followMsg, stage_no_momento: lead.stage });
 
-    await updateLead(lead.id, { stage: 'aguardando_decisor', ultimo_contato: new Date().toISOString(), tentativas_followup: 0 });
+    await updateLead(lead.id, { stage: 'abordagem_enviada', conversa_estado: 'pitch', ultimo_contato: new Date().toISOString(), tentativas_followup: 0 });
     await agendarSequenciaFollowUp(lead.id);
     return;
   }
@@ -218,6 +223,7 @@ export async function processarResposta(numeroLead, mensagemTexto) {
 
     await updateLead(lead.id, {
       stage: 'abordagem_enviada',
+      conversa_estado: 'pitch',
       ultimo_contato: new Date().toISOString(),
       tentativas_followup: 0,
     });
@@ -227,8 +233,8 @@ export async function processarResposta(numeroLead, mensagemTexto) {
     return;
   }
 
-  // ── INTERESSE ──────────────────────────────────────────
-  if (intencao === 'INTERESSE' || intencao === 'PERGUNTA') {
+  // ── INTERESSE (só vale depois do pitch) ────────────────
+  if ((intencao === 'INTERESSE' || intencao === 'PERGUNTA') && pitchEnviado) {
     await pausarEAcionar(lead, mensagemTexto, sid);
     return;
   }
@@ -257,6 +263,27 @@ export async function executarFollowUp(followUp) {
   const tentativa = (lead.tentativas_followup || 0) + 1;
 
   console.log(`[agente] Follow-up ${followUp.tipo} para ${lead.nome_negocio}`);
+
+  // Follow-up da saudação (ninguém respondeu o "Boa tarde")
+  if (followUp.tipo === 'saudacao' || followUp.tipo === 'saudacao_2') {
+    // Se o lead já respondeu qualquer coisa, a conversa está em andamento — aborta
+    const conv = await getConversa(lead.id);
+    if (conv.some(m => m.remetente === 'lead')) return;
+
+    if (followUp.tipo === 'saudacao') {
+      const msg = 'Oii tudo bem? Eu falo com o dono(a)?';
+      await enviarTexto(inst, lead.whatsapp, msg);
+      await logMensagem({ lead_id: lead.id, sessao_id: sid, remetente: 'ia', mensagem: msg, stage_no_momento: lead.stage });
+      await updateLead(lead.id, { stage: 'aguardando_decisor', conversa_estado: 'dono' });
+      // última tentativa no dia seguinte
+      await agendarFollowUp(lead.id, 'saudacao_2', new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString());
+    } else {
+      const msg = 'Oi! Passando aqui de novo rapidinho — o dono(a) tá disponível em algum horário?';
+      await enviarTexto(inst, lead.whatsapp, msg);
+      await logMensagem({ lead_id: lead.id, sessao_id: sid, remetente: 'ia', mensagem: msg, stage_no_momento: lead.stage });
+    }
+    return;
+  }
 
   // Follow-up pro decisor (ainda não chegou ao dono)
   if (followUp.tipo === 'decisor') {

@@ -8,17 +8,21 @@ export const db = createClient(
 
 // ── LEADS ──────────────────────────────────────────────────
 
-export async function getLeadsProntos() {
+export async function getLeadsProntos(instancia = null) {
   const agora = new Date();
   const hora = agora.getHours() * 60 + agora.getMinutes(); // minutos desde meia-noite
 
-  const { data, error } = await db
+  let query = db
     .from('leads')
     .select('*')
     .eq('stage', 'novo')
     .eq('conversa_pausada', false)
     .not('instancia_whatsapp', 'is', null)
     .not('whatsapp', 'is', null);
+
+  if (instancia) query = query.eq('instancia_whatsapp', instancia);
+
+  const { data, error } = await query;
 
   if (error) throw error;
 
@@ -28,6 +32,25 @@ export async function getLeadsProntos() {
     const fe = timeToMin(l.horario_fechamento || '22:00:00');
     return hora >= ab && hora <= fe - 30; // 30min de margem antes de fechar
   });
+}
+
+// Conta abordagens iniciadas hoje por instância (persistente — sobrevive a restart).
+// Em caso de erro retorna um número alto para NÃO enviar (fail-safe anti-ban).
+export async function contarAbordagensHoje(instancia) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const { count, error } = await db
+    .from('leads')
+    .select('id', { count: 'exact', head: true })
+    .eq('instancia_whatsapp', instancia)
+    .gte('abordado_em', hoje.toISOString());
+
+  if (error) {
+    console.error('[db] contarAbordagensHoje error:', error.message);
+    return 99999; // fail-safe: se não sabe quantos foram, não envia mais
+  }
+  return count || 0;
 }
 
 export async function getLead(id) {

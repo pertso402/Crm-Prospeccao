@@ -18,7 +18,25 @@ function client(instancia) {
   });
 }
 
+// Registro de mensagens enviadas pelo agente (para ignorar o eco do webhook).
+// A Evolution dispara messages.upsert com fromMe=true também para mensagens
+// enviadas via API — sem isso, o agente pausaria o lead ao ver a própria mensagem.
+const enviosRecentes = []; // { numero, texto, ts }
+
+function registrarEnvio(numero, texto) {
+  enviosRecentes.push({ numero, texto, ts: Date.now() });
+  // mantém só os últimos 10 minutos
+  const limite = Date.now() - 10 * 60 * 1000;
+  while (enviosRecentes.length && enviosRecentes[0].ts < limite) enviosRecentes.shift();
+}
+
+export function ehEcoDoAgente(numero, texto) {
+  const limite = Date.now() - 10 * 60 * 1000;
+  return enviosRecentes.some(e => e.ts >= limite && e.numero === numero && e.texto === texto);
+}
+
 export async function enviarTexto(instancia, numero, texto) {
+  registrarEnvio(numero, texto);
   const res = await client(instancia).post(`/sendText/${instancia}`, {
     number: numero,
     text: texto,

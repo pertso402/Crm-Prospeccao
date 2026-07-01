@@ -111,6 +111,7 @@ select.filter:focus { outline:none; }
 .b-fechado     { background:#0a2a0a; color:var(--green); }
 .b-perdido     { background:#2a0a0a; color:var(--red); }
 .b-manual      { background:#1a1a2a; color:#a78bfa; border:1px solid #2a2a4a; }
+.b-contato_iniciado { background:#0a1a2a; color:#64b3f4; }
 .b-inst        { background:#ffffff08; color:var(--text3); border:1px solid var(--border2); font-size:9px; }
 
 /* CONVERSA */
@@ -293,6 +294,7 @@ select.filter:focus { outline:none; }
     <select class="filter" id="filter-stage" onchange="filterLeads()">
       <option value="">Todos os stages</option>
       <option value="novo">Novo</option>
+      <option value="contato_iniciado">Em Contato</option>
       <option value="abordagem_enviada">Abordagem Enviada</option>
       <option value="aguardando_decisor">Aguardando Decisor</option>
       <option value="follow_up_frio">Follow-up Frio</option>
@@ -641,6 +643,7 @@ function renderMsg(m) {
 // ── KANBAN ────────────────────────────────────────────────
 const STAGES = [
   { key: 'novo', label: 'Novo', color: '#555' },
+  { key: 'contato_iniciado', label: 'Em Contato', color: '#64b3f4' },
   { key: 'abordagem_enviada', label: 'Abordagem', color: '#1e90ff' },
   { key: 'aguardando_decisor', label: 'Aguard. Decisor', color: '#aadd00' },
   { key: 'follow_up_frio', label: 'Follow-up Frio', color: '#ffa502' },

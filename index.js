@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { processarResposta } from './src/agente.js';
+import { ehEcoDoAgente } from './src/evolution.js';
 import { logMensagem, updateLead, getLeadByWhatsapp, sessaoId } from './src/db.js';
 import { pausarAgente, retomarAgente, estado, agenteAtivo } from './src/estado.js';
 import { criarSessao, getSessao, simularInicio, simularResposta } from './src/simulador.js';
@@ -14,6 +15,9 @@ app.use(express.json({ limit: '10mb' }));
 
 // ── WEBHOOK EVOLUTION API ─────────────────────────────────
 
+// Dedup: a Evolution pode reentregar o mesmo evento
+const msgsProcessadas = new Set();
+
 app.post('/webhook', async (req, res) => {
   res.sendStatus(200);
 
@@ -24,8 +28,20 @@ app.post('/webhook', async (req, res) => {
     const msg = body.data;
     if (!msg) return;
 
+    const msgId = msg.key?.id;
+    if (msgId) {
+      if (msgsProcessadas.has(msgId)) return;
+      msgsProcessadas.add(msgId);
+      if (msgsProcessadas.size > 5000) {
+        msgsProcessadas.delete(msgsProcessadas.values().next().value);
+      }
+    }
+
     const numero = msg.key?.remoteJid?.replace('@s.whatsapp.net', '');
     if (!numero) return;
+
+    // Ignora grupos e broadcasts
+    if (msg.key?.remoteJid?.includes('@g.us') || msg.key?.remoteJid?.includes('@broadcast')) return;
 
     const texto = msg.message?.conversation
       || msg.message?.extendedTextMessage?.text
@@ -33,9 +49,13 @@ app.post('/webhook', async (req, res) => {
       || '';
 
     // ── MENSAGEM ENVIADA PELO PETER MANUALMENTE ───────────
-    // fromMe = true significa que Peter mandou pelo app
+    // fromMe = true significa que saiu do nosso número — pode ser Peter
+    // digitando no celular OU o próprio agente enviando pela API (eco).
     if (msg.key?.fromMe) {
       if (!texto.trim()) return;
+
+      // Eco do agente: mensagem que o próprio sistema enviou — já foi logada, ignora
+      if (ehEcoDoAgente(numero, texto)) return;
 
       // Identifica qual lead é pelo número de destino
       const lead = await getLeadByWhatsapp(numero);
