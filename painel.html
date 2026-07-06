@@ -303,6 +303,9 @@ select.filter:focus { outline:none; }
       <option value="perdido">Perdido</option>
       <option value="manual">Manual (Peter)</option>
     </select>
+    <select class="filter" id="filter-segmento" onchange="filterLeads()">
+      <option value="">Todos os segmentos</option>
+    </select>
     <select class="filter" id="filter-inst" onchange="filterLeads()">
       <option value="">Todas instâncias</option>
       <option value="trimly">trimly</option>
@@ -481,10 +484,12 @@ function filteredLeads() {
   const q = document.getElementById('search-input')?.value?.toLowerCase() || '';
   const stage = document.getElementById('filter-stage')?.value || '';
   const inst = document.getElementById('filter-inst')?.value || '';
+  const seg = document.getElementById('filter-segmento')?.value || '';
 
   if (q) list = list.filter(l => (l.nome_negocio||'').toLowerCase().includes(q) || (l.nome_decisor||'').toLowerCase().includes(q));
   if (stage) list = list.filter(l => l.stage === stage);
   if (inst) list = list.filter(l => l.instancia_whatsapp === inst);
+  if (seg) list = list.filter(l => (l.segmento || '') === seg);
 
   // interessados primeiro
   return list.sort((a,b) => {
@@ -726,10 +731,31 @@ function switchTab(tab) {
 
 // ── RENDER ALL ────────────────────────────────────────────
 function renderAll() {
+  popularSegmentos();
   updateStats();
   if (currentTab === 'conversas') renderLeadList();
   else renderKanban();
   updateTimestamp();
+}
+
+// Preenche o dropdown de segmentos com base nos leads do pipeline atual.
+// Mostra a contagem ao lado de cada segmento e preserva a seleção do usuário.
+function popularSegmentos() {
+  const sel = document.getElementById('filter-segmento');
+  if (!sel) return;
+  const base = currentPipeline === 'todos'
+    ? leads
+    : leads.filter(l => (l.produto || 'cardapio') === currentPipeline);
+
+  const contagem = {};
+  base.forEach(l => { const s = l.segmento || ''; if (s) contagem[s] = (contagem[s] || 0) + 1; });
+  const segmentos = Object.keys(contagem).sort();
+
+  const atual = sel.value;
+  sel.innerHTML = '<option value="">Todos os segmentos</option>' +
+    segmentos.map(s => `<option value="${escHtml(s)}">${escHtml(s)} (${contagem[s]})</option>`).join('');
+  // Mantém a seleção se ainda existir no pipeline atual, senão reseta
+  sel.value = segmentos.includes(atual) ? atual : '';
 }
 
 function filterLeads() { renderLeadList(); }
