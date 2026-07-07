@@ -378,6 +378,7 @@ select.filter:focus { outline:none; }
       </label>
     </div>
     <div class="modal-actions">
+      <button class="btn btn-danger" onclick="excluirLead()" id="btn-excluir" style="display:none;margin-right:auto;">🗑 Excluir</button>
       <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarLead()" id="btn-salvar">Salvar</button>
     </div>
@@ -820,6 +821,7 @@ function openModalNovo() {
   document.getElementById('f-instagram').value = '';
   document.getElementById('f-obs').value = '';
   document.getElementById('f-manual').checked = false;
+  document.getElementById('btn-excluir').style.display = 'none';
   document.getElementById('modal-overlay').classList.remove('hidden');
   setTimeout(() => document.getElementById('f-nome').focus(), 50);
 }
@@ -838,12 +840,54 @@ function openModalEditar(leadId) {
   document.getElementById('f-instagram').value = lead.instagram || '';
   document.getElementById('f-obs').value = lead.observacao_captacao || '';
   document.getElementById('f-manual').checked = !!(lead.assumido_por_humano);
+  const btnEx = document.getElementById('btn-excluir');
+  btnEx.style.display = 'inline-block';
+  btnEx.disabled = false;
+  btnEx.textContent = '🗑 Excluir';
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
 
 function closeModal() {
   document.getElementById('modal-overlay').classList.add('hidden');
   editingLeadId = null;
+}
+
+async function excluirLead() {
+  if (!editingLeadId) return;
+  const lead = leads.find(l => l.id === editingLeadId);
+  const nome = lead?.nome_negocio || 'este lead';
+  if (!confirm(`Excluir "${nome}" permanentemente?\n\nA conversa e o histórico também serão apagados. Esta ação não pode ser desfeita.`)) return;
+
+  const btn = document.getElementById('btn-excluir');
+  btn.disabled = true;
+  btn.textContent = 'Excluindo...';
+
+  try {
+    // Apaga conversas e follow-ups do lead antes (evita registros órfãos)
+    await sb.from('conversas').delete().eq('lead_id', editingLeadId);
+    await sb.from('follow_ups').delete().eq('lead_id', editingLeadId);
+    const { error } = await sb.from('leads').delete().eq('id', editingLeadId);
+    if (error) throw error;
+
+    const idExcluido = editingLeadId;
+    showToast(`"${nome}" excluído`, 'ok');
+    closeModal();
+    if (selectedLeadId === idExcluido) selectedLeadId = null;
+    delete conversas[idExcluido];
+    await loadLeads();
+    renderAll();
+    // Se estava vendo a conversa desse lead, volta pro estado vazio
+    document.getElementById('conv-panel').innerHTML = `
+      <div class="empty-conv">
+        <div class="empty-icon">💬</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:var(--text2);margin-bottom:6px;">Selecione um lead</div>
+        <div style="font-size:12px;">Clique em um lead à esquerda para ver a conversa completa</div>
+      </div>`;
+  } catch(e) {
+    showToast('Erro ao excluir: ' + e.message, 'fire');
+    btn.disabled = false;
+    btn.textContent = '🗑 Excluir';
+  }
 }
 
 async function salvarLead() {
